@@ -1,0 +1,16 @@
+{
+  "name": "insta-automation",
+  "version": "1.0.0",
+  "description": "Instagram automation with GUI and background mode",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.58.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
