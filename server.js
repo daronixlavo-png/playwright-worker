@@ -1,64 +1,43 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
-
+const { exec } = require('child_process');
 const app = express();
-app.use(bodyParser.json());
+const port = process.env.PORT || 6080;
 
-const PORT = process.env.PORT || 3000;
-const RECORDINGS_DIR = path.join(__dirname, 'recordings');
-if (!fs.existsSync(RECORDINGS_DIR)) fs.mkdirSync(RECORDINGS_DIR);
+let currentProcess = null;
 
-let guiBrowser = null;
-let currentRecordingId = null;
+app.get('/run', (req, res) => {
+    if (currentProcess) {
+        return res.send('Automation already running');
+    }
+    currentProcess = exec('node automation.js', (error, stdout, stderr) => {
+        console.log(stdout);
+        if (error) console.log(error);
+        currentProcess = null;
+    });
+    res.send('Automation started in background (headless)');
+});
 
-// Ping endpoint
+app.get('/start', (req, res) => {
+    if (currentProcess) return res.send('GUI already running');
+    
+    // Run with virtual display (xvfb) for GUI
+    currentProcess = exec('xvfb-run -a node automation.js', (error, stdout, stderr) => {
+        console.log(stdout);
+        if (error) console.log(error);
+        currentProcess = null;
+    });
+    res.send('GUI started temporarily via Xvfb');
+});
+
+app.get('/stop', (req, res) => {
+    if (currentProcess) {
+        currentProcess.kill();
+        currentProcess = null;
+        return res.send('Process stopped');
+    }
+    res.send('No process running');
+});
+
 app.get('/ping', (req, res) => res.send('Server alive'));
 
-// Start recording GUI
-app.get('/start', async (req, res) => {
-  if (guiBrowser) return res.send('GUI already running');
-  currentRecordingId = uuidv4();
-  const filePath = path.join(RECORDINGS_DIR, `${currentRecordingId}.js`);
-
-  guiBrowser = await chromium.launch({ headless: false });
-  const page = await guiBrowser.newPage();
-
-  // Simple recorder logic (just demo: record URL visit)
-  page.on('framenavigated', frame => {
-    const content = `module.exports = async (page) => { await page.goto('${frame.url()}'); }`;
-    fs.writeFileSync(filePath, content);
-  });
-
-  res.send({ message: 'GUI started for recording', recordingId: currentRecordingId });
-});
-
-// Stop recording GUI
-app.get('/stop', async (req, res) => {
-  if (!guiBrowser) return res.send('No GUI running');
-  await guiBrowser.close();
-  guiBrowser = null;
-  res.send({ message: 'GUI stopped', recordingId: currentRecordingId });
-  currentRecordingId = null;
-});
-
-// Run recorded automation headless
-app.get('/run', async (req, res) => {
-  const id = req.query.id;
-  if (!id) return res.status(400).send('Missing id');
-  const filePath = path.join(RECORDINGS_DIR, `${id}.js`);
-  if (!fs.existsSync(filePath)) return res.status(404).send('Recording not found');
-
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-  const automation = require(filePath);
-  await automation(page);
-  await browser.close();
-
-  res.send({ message: `Automation ${id} executed headless` });
-});
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(port, () => console.log(`Server running on port ${port}`));
