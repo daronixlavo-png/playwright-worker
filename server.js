@@ -1,43 +1,53 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { chromium } = require('playwright');
 const app = express();
-const port = process.env.PORT || 6080;
+const PORT = process.env.PORT || 6080;
 
-let currentProcess = null;
+let browserContext = null;
 
-app.get('/run', (req, res) => {
-    if (currentProcess) {
-        return res.send('Automation already running');
+app.get('/ping', (req, res) => {
+    res.send('Server alive');
+});
+
+app.get('/start', async (req, res) => {
+    if (browserContext) {
+        return res.send('GUI already running');
     }
-    currentProcess = exec('node automation.js', (error, stdout, stderr) => {
-        console.log(stdout);
-        if (error) console.log(error);
-        currentProcess = null;
-    });
-    res.send('Automation started in background (headless)');
-});
-
-app.get('/start', (req, res) => {
-    if (currentProcess) return res.send('GUI already running');
-    
-    // Run with virtual display (xvfb) for GUI
-    currentProcess = exec('xvfb-run -a node automation.js', (error, stdout, stderr) => {
-        console.log(stdout);
-        if (error) console.log(error);
-        currentProcess = null;
-    });
-    res.send('GUI started temporarily via Xvfb');
-});
-
-app.get('/stop', (req, res) => {
-    if (currentProcess) {
-        currentProcess.kill();
-        currentProcess = null;
-        return res.send('Process stopped');
+    try {
+        // Xvfb headless GUI
+        const userDataDir = '/app/user-data';
+        browserContext = await chromium.launchPersistentContext(userDataDir, {
+            headless: false,
+            args: ['--no-sandbox', '--disable-dev-shm-usage']
+        });
+        res.send('GUI started temporarily via Xvfb');
+    } catch (err) {
+        console.error('Error starting GUI:', err);
+        res.status(500).send('Failed to start GUI');
     }
-    res.send('No process running');
 });
 
-app.get('/ping', (req, res) => res.send('Server alive'));
+app.get('/stop', async (req, res) => {
+    if (browserContext) {
+        await browserContext.close();
+        browserContext = null;
+        res.send('GUI stopped');
+    } else {
+        res.send('GUI not running');
+    }
+});
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.get('/run', async (req, res) => {
+    try {
+        const page = await browserContext.newPage();
+        await page.goto('https://example.com'); // Change your workflow here
+        console.log('Page title:', await page.title());
+        await page.close();
+        res.send('Automation run completed');
+    } catch (err) {
+        console.error('Error running automation:', err);
+        res.status(500).send('Automation failed');
+    }
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
