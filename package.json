@@ -1,14 +1,16 @@
 {
-  "name": "insta-automation",
+  "name": "playwright-gui-manager",
   "version": "1.0.0",
-  "description": "Instagram automation with GUI and background mode",
+  "description": "Playwright GUI automation with record/run system",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "playwright": "^1.58.2"
+    "playwright": "^1.58.2",
+    "body-parser": "^1.20.2",
+    "uuid": "^9.0.0"
   },
   "engines": {
     "node": ">=18"
