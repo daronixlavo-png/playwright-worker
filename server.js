@@ -1,94 +1,64 @@
-const express = require("express");
-const { chromium } = require("playwright");
-const path = require("path");
+const express = require('express');
+const bodyParser = require('body-parser');
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
+app.use(bodyParser.json());
+
 const PORT = process.env.PORT || 3000;
+const RECORDINGS_DIR = path.join(__dirname, 'recordings');
+if (!fs.existsSync(RECORDINGS_DIR)) fs.mkdirSync(RECORDINGS_DIR);
 
-let isRunning = false;
 let guiBrowser = null;
+let currentRecordingId = null;
 
-const userDataPath = path.join(__dirname, "user-data");
+// Ping endpoint
+app.get('/ping', (req, res) => res.send('Server alive'));
 
-// =======================
-// GUI MODE
-// =======================
-app.get("/start", async (req, res) => {
-  if (isRunning) {
-    return res.send("⚠ Automation already running.");
-  }
+// Start recording GUI
+app.get('/start', async (req, res) => {
+  if (guiBrowser) return res.send('GUI already running');
+  currentRecordingId = uuidv4();
+  const filePath = path.join(RECORDINGS_DIR, `${currentRecordingId}.js`);
 
-  try {
-    isRunning = true;
+  guiBrowser = await chromium.launch({ headless: false });
+  const page = await guiBrowser.newPage();
 
-    guiBrowser = await chromium.launchPersistentContext(userDataPath, {
-      headless: false
-    });
+  // Simple recorder logic (just demo: record URL visit)
+  page.on('framenavigated', frame => {
+    const content = `module.exports = async (page) => { await page.goto('${frame.url()}'); }`;
+    fs.writeFileSync(filePath, content);
+  });
 
-    const page = await guiBrowser.newPage();
-    await page.goto("https://www.instagram.com");
-
-    res.send("✅ GUI Started. Login manually. Then hit /stop");
-  } catch (error) {
-    isRunning = false;
-    res.send("❌ Error starting GUI: " + error.message);
-  }
+  res.send({ message: 'GUI started for recording', recordingId: currentRecordingId });
 });
 
-// =======================
-// BACKGROUND MODE
-// =======================
-app.get("/run", async (req, res) => {
-  if (isRunning) {
-    return res.send("⚠ Already running in GUI mode.");
-  }
-
-  try {
-    isRunning = true;
-
-    const browser = await chromium.launchPersistentContext(userDataPath, {
-      headless: true
-    });
-
-    const page = await browser.newPage();
-    await page.goto("https://www.instagram.com");
-
-    console.log("✅ Session reused successfully.");
-
-    // 🔹 Yaha apna automation code daalna
-
-    await browser.close();
-    isRunning = false;
-
-    res.send("✅ Background automation completed.");
-  } catch (error) {
-    isRunning = false;
-    res.send("❌ Error in background automation: " + error.message);
-  }
-});
-
-// =======================
-// STOP GUI
-// =======================
-app.get("/stop", async (req, res) => {
-  if (!guiBrowser) {
-    return res.send("⚠ No GUI running.");
-  }
-
+// Stop recording GUI
+app.get('/stop', async (req, res) => {
+  if (!guiBrowser) return res.send('No GUI running');
   await guiBrowser.close();
   guiBrowser = null;
-  isRunning = false;
-
-  res.send("🛑 GUI stopped.");
+  res.send({ message: 'GUI stopped', recordingId: currentRecordingId });
+  currentRecordingId = null;
 });
 
-// =======================
-// KEEP ALIVE
-// =======================
-app.get("/ping", (req, res) => {
-  res.send("🚀 Server alive.");
+// Run recorded automation headless
+app.get('/run', async (req, res) => {
+  const id = req.query.id;
+  if (!id) return res.status(400).send('Missing id');
+  const filePath = path.join(RECORDINGS_DIR, `${id}.js`);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Recording not found');
+
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const automation = require(filePath);
+  await automation(page);
+  await browser.close();
+
+  res.send({ message: `Automation ${id} executed headless` });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
