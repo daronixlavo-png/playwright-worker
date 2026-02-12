@@ -14,7 +14,6 @@ app.get('/start', async (req, res) => {
         return res.send('GUI already running');
     }
     try {
-        // Xvfb headless GUI
         const userDataDir = '/app/user-data';
         browserContext = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
@@ -40,7 +39,7 @@ app.get('/stop', async (req, res) => {
 app.get('/run', async (req, res) => {
     try {
         const page = await browserContext.newPage();
-        await page.goto('https://example.com'); // Change your workflow here
+        await page.goto('https://example.com'); // Replace with your workflow
         console.log('Page title:', await page.title());
         await page.close();
         res.send('Automation run completed');
