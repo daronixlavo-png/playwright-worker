@@ -1,20 +1,22 @@
-# Base image with Playwright and browsers
-FROM mcr.microsoft.com/playwright:v1.40.0-focal
+# Base image updated to latest Playwright with browsers
+FROM mcr.microsoft.com/playwright:v1.58.2-focal
 
 # Set working directory
 WORKDIR /app
 
-# Copy only package.json (lock file optional)
-COPY package.json ./
-
-# Install npm dependencies
+# Copy package files and install dependencies
+COPY package.json package-lock.json ./
 RUN npm install
+RUN npx playwright install
 
-# Copy the rest of the repo
+# Copy all app files
 COPY . ./
 
-# Expose server port
+# Ensure start script is executable
+RUN chmod +x /app/start-vnc.sh
+
+# Expose port for web (if using VNC / API)
 EXPOSE 10000
 
-# Start the server
+# Default command
 CMD ["npm", "start"]
