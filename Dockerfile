@@ -1,5 +1,5 @@
-# Base image updated to latest Playwright with browsers
-FROM mcr.microsoft.com/playwright:v1.58.2-focal
+# Use latest stable Playwright image
+FROM mcr.microsoft.com/playwright:latest
 
 # Set working directory
 WORKDIR /app
@@ -15,7 +15,7 @@ COPY . ./
 # Ensure start script is executable
 RUN chmod +x /app/start-vnc.sh
 
-# Expose port for web (if using VNC / API)
+# Expose port for API
 EXPOSE 10000
 
 # Default command
