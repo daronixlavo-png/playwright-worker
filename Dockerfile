@@ -1,23 +1,19 @@
-# Base image with Playwright and browsers pre-installed
+# Use latest Playwright image with all browsers
 FROM mcr.microsoft.com/playwright:latest
 
 # Set working directory
 WORKDIR /app
 
-# Copy only package.json (package-lock.json optional)
-COPY package.json ./
-
-# Install dependencies
+# Copy package files and install dependencies
+COPY package.json package-lock.json* ./
 RUN npm install
-
-# Install Playwright browsers
 RUN npx playwright install
 
-# Copy all app files
-COPY . ./
+# Copy rest of app
+COPY . .
 
-# Expose port for server
+# Expose port
 EXPOSE 10000
 
-# Start server
+# Start app
 CMD ["node", "server.js"]
