@@ -1,16 +1,14 @@
 {
-  "name": "insta-automation",
+  "name": "full-automation",
   "version": "1.0.0",
-  "description": "Instagram automation with optional GUI",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "playwright": "^1.58.2"
-  },
-  "engines": {
-    "node": ">=18"
+    "playwright": "^1.40.0",
+    "dotenv": "^16.0.0",
+    "body-parser": "^1.20.2"
   }
 }
