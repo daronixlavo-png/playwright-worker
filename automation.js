@@ -1,46 +1,89 @@
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright');
+require('dotenv').config();
+const iPhone = devices['iPhone 13'];
 
-(async () => {
-    try {
-        // Launch browser in headed mode (GUI visible)
-        const browser = await chromium.launch({ headless: false });
+async function startSessions() {
+  const browser = await chromium.launch({ headless: false });
+  const context = await browser.newContext({ ...iPhone, userAgent: iPhone.userAgent });
+  const page = await context.newPage();
 
-        // Open new page
-        const page = await browser.newPage();
+  // ----- ChatGPT login -----
+  await page.goto('https://chat.openai.com/');
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(5000);
+  await page.fill('input[name="username"]', process.env.CHATGPT_USER);
+  await page.fill('input[name="password"]', process.env.CHATGPT_PASS);
+  await page.click('button[type="submit"]');
+  await page.waitForTimeout(5000);
 
-        // Example: Navigate to Instagram login page
-        await page.goto('https://www.instagram.com/accounts/login/');
+  // Save ChatGPT session
+  await context.storageState({ path: './sessions/chatgpt.json' });
 
-        console.log('Login page loaded');
+  // ----- InstantDM + Instagram login -----
+  await page.goto('https://app.instantdm.com/login');
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(5000);
+  await page.click('button:has-text("Continue with Instagram")');
+  await page.waitForTimeout(5000);
+  await page.fill('input[name="username"]', process.env.INSTA_USER);
+  await page.fill('input[name="password"]', process.env.INSTA_PASS);
+  await page.click('button[type="submit"]');
+  await page.waitForTimeout(5000);
+  await page.click('button:has-text("Allow")');
 
-        // Wait for login fields
-        await page.waitForSelector('input[name="username"]');
-        await page.waitForSelector('input[name="password"]');
+  // Save InstantDM + Instagram session
+  await context.storageState({ path: './sessions/instantdm.json' });
 
-        // Example: fill username & password (replace with env variables!)
-        await page.fill('input[name="username"]', process.env.IG_USERNAME || 'your_username');
-        await page.fill('input[name="password"]', process.env.IG_PASSWORD || 'your_password');
+  await browser.close();
+}
 
-        // Click login
-        await page.click('button[type="submit"]');
+async function runAutomation(mp4Url, affiliateLink) {
+  const browser = await chromium.launchPersistentContext({
+    userDataDir: './sessions',
+    headless: true
+  });
+  const page = await browser.newPage();
 
-        // Wait for main page to load
-        await page.waitForTimeout(5000); // adjust as needed
+  // ----- ChatGPT Automation -----
+  await page.goto('https://chat.openai.com/');
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(5000);
+  // Navigate to specific chat/folder
+  await page.setInputFiles('input[type="file"]', mp4Url);
+  await page.waitForTimeout(5000);
+  const chatResponse = await page.locator('div.message:last-child').innerText();
 
-        console.log('Logged in successfully');
+  // ----- Instagram Automation -----
+  await page.goto('https://www.instagram.com/');
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(5000);
+  await page.click('button:has-text("Create")');
+  await page.waitForTimeout(5000);
+  await page.setInputFiles('input[type="file"]', mp4Url);
+  await page.fill('textarea[aria-label="Caption"]', chatResponse);
+  await page.waitForTimeout(5000);
+  await page.click('button:has-text("Share")');
 
-        // Example: navigate to create post
-        // (Instagram web upload button)
-        // await page.click('[aria-label="New Post"]');  // selector may vary
+  // ----- InstantDM Automation -----
+  await page.goto('https://app.instantdm.com/dashboard');
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(5000);
+  await page.click('text=Instagram Automation');
 
-        // Add your automation workflow here
-        console.log('Ready to perform post automation');
+  const postSelector = 'div.post:first-of-type';
+  await page.locator(postSelector).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(5000);
+  await page.click(postSelector);
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(5000);
+  await page.locator('div.send-area').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(5000);
+  await page.click('div.toggle-upper');
+  await page.fill('textarea.affiliate-input', affiliateLink);
+  await page.waitForTimeout(5000);
+  await page.click('button:has-text("Publish")');
 
-        // Keep browser open for interaction
-        // GUI will remain until /stop is hit
-        // await browser.close(); // DO NOT close here if you want GUI interactable
+  await browser.close();
+}
 
-    } catch (err) {
-        console.error('Automation error:', err);
-    }
-})();
+module.exports = { startSessions, runAutomation };
