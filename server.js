@@ -1,52 +1,37 @@
+require('dotenv').config();
 const express = require('express');
-const { chromium } = require('playwright');
+const bodyParser = require('body-parser');
+const { runAutomation, startSessions } = require('./automation');
+
 const app = express();
-const PORT = process.env.PORT || 6080;
+app.use(bodyParser.json());
 
-let browserContext = null;
+app.get('/ping', (req, res) => res.send('Server is alive'));
 
-app.get('/ping', (req, res) => {
-    res.send('Server alive');
+// Start sessions for ChatGPT, Instagram & InstantDM
+app.get('/startDT', async (req, res) => {
+  try {
+    await startSessions();
+    res.send('All sessions saved successfully');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error starting sessions');
+  }
 });
 
-app.get('/start', async (req, res) => {
-    if (browserContext) {
-        return res.send('GUI already running');
-    }
-    try {
-        const userDataDir = '/app/user-data';
-        browserContext = await chromium.launchPersistentContext(userDataDir, {
-            headless: false,
-            args: ['--no-sandbox', '--disable-dev-shm-usage']
-        });
-        res.send('GUI started temporarily via Xvfb');
-    } catch (err) {
-        console.error('Error starting GUI:', err);
-        res.status(500).send('Failed to start GUI');
-    }
+// Run full automation workflow
+app.post('/runDT', async (req, res) => {
+  const { mp4Url, affiliateLink } = req.body;
+  if (!mp4Url || !affiliateLink) return res.status(400).send('Missing parameters');
+
+  try {
+    await runAutomation(mp4Url, affiliateLink);
+    res.send('Automation completed successfully');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error running automation');
+  }
 });
 
-app.get('/stop', async (req, res) => {
-    if (browserContext) {
-        await browserContext.close();
-        browserContext = null;
-        res.send('GUI stopped');
-    } else {
-        res.send('GUI not running');
-    }
-});
-
-app.get('/run', async (req, res) => {
-    try {
-        const page = await browserContext.newPage();
-        await page.goto('https://example.com'); // Replace with your workflow
-        console.log('Page title:', await page.title());
-        await page.close();
-        res.send('Automation run completed');
-    } catch (err) {
-        console.error('Error running automation:', err);
-        res.status(500).send('Automation failed');
-    }
-});
-
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
