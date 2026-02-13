@@ -1,89 +1,40 @@
-const { chromium, devices } = require('playwright');
+const { chromium } = require('playwright');
 require('dotenv').config();
-const iPhone = devices['iPhone 13'];
+const fs = require('fs');
+const path = require('path');
 
 async function startSessions() {
-  const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext({ ...iPhone, userAgent: iPhone.userAgent });
-  const page = await context.newPage();
+    // Launch browser in headless mode
+    const browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-  // ----- ChatGPT login -----
-  await page.goto('https://chat.openai.com/');
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(5000);
-  await page.fill('input[name="username"]', process.env.CHATGPT_USER);
-  await page.fill('input[name="password"]', process.env.CHATGPT_PASS);
-  await page.click('button[type="submit"]');
-  await page.waitForTimeout(5000);
+    const context = await browser.newContext({
+        storageState: path.resolve('./sessions/session.json') // Session file
+    });
 
-  // Save ChatGPT session
-  await context.storageState({ path: './sessions/chatgpt.json' });
+    const page = await context.newPage();
 
-  // ----- InstantDM + Instagram login -----
-  await page.goto('https://app.instantdm.com/login');
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(5000);
-  await page.click('button:has-text("Continue with Instagram")');
-  await page.waitForTimeout(5000);
-  await page.fill('input[name="username"]', process.env.INSTA_USER);
-  await page.fill('input[name="password"]', process.env.INSTA_PASS);
-  await page.click('button[type="submit"]');
-  await page.waitForTimeout(5000);
-  await page.click('button:has-text("Allow")');
+    // Example: Instant DM login flow
+    await page.goto('https://app.instantdm.com/login', { waitUntil: 'load' });
+    await page.waitForTimeout(5000); // Wait 5s after full load
 
-  // Save InstantDM + Instagram session
-  await context.storageState({ path: './sessions/instantdm.json' });
+    // Continue with Instagram
+    await page.click('text=Continue with Instagram');
+    await page.fill('input[name="username"]', process.env.INSTA_USERNAME);
+    await page.fill('input[name="password"]', process.env.INSTA_PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForNavigation({ waitUntil: 'load' });
+    
+    // Accept permissions if shown
+    const allowBtn = await page.$('text=Allow');
+    if (allowBtn) await allowBtn.click();
 
-  await browser.close();
+    // Example: navigate dashboard -> Insta automation
+    await page.click('text=Instagram Automation');
+
+    console.log('Automation started successfully.');
 }
 
-async function runAutomation(mp4Url, affiliateLink) {
-  const browser = await chromium.launchPersistentContext({
-    userDataDir: './sessions',
-    headless: true
-  });
-  const page = await browser.newPage();
-
-  // ----- ChatGPT Automation -----
-  await page.goto('https://chat.openai.com/');
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(5000);
-  // Navigate to specific chat/folder
-  await page.setInputFiles('input[type="file"]', mp4Url);
-  await page.waitForTimeout(5000);
-  const chatResponse = await page.locator('div.message:last-child').innerText();
-
-  // ----- Instagram Automation -----
-  await page.goto('https://www.instagram.com/');
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(5000);
-  await page.click('button:has-text("Create")');
-  await page.waitForTimeout(5000);
-  await page.setInputFiles('input[type="file"]', mp4Url);
-  await page.fill('textarea[aria-label="Caption"]', chatResponse);
-  await page.waitForTimeout(5000);
-  await page.click('button:has-text("Share")');
-
-  // ----- InstantDM Automation -----
-  await page.goto('https://app.instantdm.com/dashboard');
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(5000);
-  await page.click('text=Instagram Automation');
-
-  const postSelector = 'div.post:first-of-type';
-  await page.locator(postSelector).scrollIntoViewIfNeeded();
-  await page.waitForTimeout(5000);
-  await page.click(postSelector);
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(5000);
-  await page.locator('div.send-area').scrollIntoViewIfNeeded();
-  await page.waitForTimeout(5000);
-  await page.click('div.toggle-upper');
-  await page.fill('textarea.affiliate-input', affiliateLink);
-  await page.waitForTimeout(5000);
-  await page.click('button:has-text("Publish")');
-
-  await browser.close();
-}
-
-module.exports = { startSessions, runAutomation };
+module.exports = { startSessions };
