@@ -1,22 +1,23 @@
-# Use latest stable Playwright image
+# Base image with Playwright and browsers pre-installed
 FROM mcr.microsoft.com/playwright:latest
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json package-lock.json ./
+# Copy only package.json (package-lock.json optional)
+COPY package.json ./
+
+# Install dependencies
 RUN npm install
+
+# Install Playwright browsers
 RUN npx playwright install
 
 # Copy all app files
 COPY . ./
 
-# Ensure start script is executable
-RUN chmod +x /app/start-vnc.sh
-
-# Expose port for API
+# Expose port for server
 EXPOSE 10000
 
-# Default command
-CMD ["npm", "start"]
+# Start server
+CMD ["node", "server.js"]
